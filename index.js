@@ -3,8 +3,15 @@
 
 "use strict";
 
-const chalk = require('chalk'), Serial = require('serialport'), stream = require('stream');
-exports.serial = {baudRate:115200, dataBits:8, parity:'none', stopBits:1, flowControl:0};
+import Serial from 'serialport'
+import stream from 'stream';
+
+export const serial = {baudRate:115200, dataBits:8, parity:'none', stopBits:1, flowControl:0};
+
+export const settings = {
+	debug: false,
+	inputMode: 1
+}
 
 //----------- Helpful Functions -----------
 
@@ -37,34 +44,36 @@ function fromSignedInt8(byte) {
 //----------- Main Library Functions -----------
 
 //Get A List Of Serial Ports:
-exports.ports = (cb) => {
-	Serial.list((err, ports) => { cb(err?[]:ports); });
+export const ports = (cb) => {
+	Serial.list().then(ports => {
+		cb(postList||[])
+	}).catch( err => console.err)
 }
 
 //Asks you to select a serial port:
-exports.prompt = (cb) => {
+export const prompt = (cb) => {
 	//List available ports in command line:
-	Serial.list((err, ports) => {
-		console.log(chalk.yellow("--------- Available Ports ---------"));
+	Serial.list().then( ports => {
+		console.log("--------- Available Ports ---------");
 		for(let i=0; i < ports.length; i++) {
-			let commString = "["+(i+1)+"] "+ports[i].comName;
+			let commString = "["+(i+1)+"] "+ports[i].path;
 			if(ports[i].manufacturer) commString += (", Brand = '"+ports[i].manufacturer+"'");
 			console.log(commString);
 		}
-		console.log(chalk.yellow("-----------------------------------\n"));
-		console.log(chalk.cyan("Please enter the port you want to use:"));
+		console.log("-----------------------------------\n");
+		console.log("Please enter the port you want to use:");
 		//Wait for user input:
 		function onPortSelectInput(port) {
 			port=port.replace(/\n/g, "").replace(/\r/g, ""); let portExists=0;
-			for(let i=0; i < ports.length; i++) if(port == ports[i].comName) { portExists=1; break; }
+			for(let i=0; i < ports.length; i++) if(port == ports[i].path) { portExists=1; break; }
 			if(!portExists && Number(port) && ports[Number(port)-1]) {
-				port = ports[Number(port)-1].comName; portExists=1;
+				port = ports[Number(port)-1].path; portExists=1;
 			}
 			if(portExists) {
-				console.log(chalk.bgGreen.black("Listening on port \""+port+"\"")+"\n");
-				process.stdin.removeListener('data', onPortSelectInput); exports.open(port,cb);
+				console.log("Listening on port \""+port+"\""+"\n");
+				process.stdin.removeListener('data', onPortSelectInput); open(port,cb);
 			} else {
-				console.log(chalk.bgRed.black("Port \""+port+"\" does not exist!"));
+				console.log("Port \""+port+"\" does not exist!");
 			}
 		}
 		process.stdin.resume();
@@ -73,18 +82,18 @@ exports.prompt = (cb) => {
 			if(text.search('\n') != -1) text = text.substring(0, text.search('\n'));
 			if(text.search('\r') != -1) text = text.substring(0, text.search('\r'));
 			if(text == "exit" || text == "quit") {
-				console.log(chalk.magenta("Exiting..."));
+				console.log("Exiting...");
 				process.exit();
 			}
 		});
 		process.stdin.on('data', onPortSelectInput);
-	});
+	}).catch( err => console.err)
 }
 
 //Open iRobot Serial Port:
-exports.open = (port, cb) => {
+export const open = (port, cb) => {
 	let r = new Robot();
-	if(typeof port == 'string') r.port = new Serial(port, exports.serial);
+	if(typeof port == 'string') r.port = new Serial(port, serial);
 	else if(port instanceof stream.Duplex) r.port = port; else { cb(); return; }
 	r.port.once('open', () => { r.start(); r.port.on('data', r.read); if(cb) cb(r); });
 	r.port.on('error', () => {});
@@ -111,7 +120,7 @@ Robot.prototype.read = function(data) {
 	//Data Parsing Timer:
 	if(r.inTmr) clearTimeout(r.inTmr); r.inTmr = setTimeout(() => {
 		if(r.dataParser && r.inBuf && r.inBuf.length >= 80) { r.dataParser(r.inBuf); r.inBuf = r.inTmr = null; }
-		if(exports.debug && r.inBuf) console.log(chalk.bold.green("Packet Miss ["+r.inBuf.length+"]"));
+		if(settings.debug && r.inBuf) console.log("Packet Miss ["+r.inBuf.length+"]");
 	},8);
 }
 
@@ -264,15 +273,15 @@ function onSensorData(data) {
 	for(let i=0,l=o.length; i<l; i++) if(changed[o[i]]) this.on[o[i]](this.data[o[i]]);
 
 	//Debug Stuff:
-	if(exports.debug) {
-		if(exports.inputMode == 2 || exports.inputMode == null) {
+	if(settings.debug) {
+		if(settings.inputMode == 2 || settings.inputMode == null) {
 			for(let i=0,l=data.length; i<l; i++) {
-				console.log(chalk.yellow("["+i+"]")+chalk.cyan(" > "+data[i]));
+				console.log("["+i+"]"+" > "+data[i]);
 			}
-		} else if(exports.inputMode == 1) {
-			data = chalk.cyan("> "+data.toString());
-			data.replace(/\n/g, chalk.yellow.bold("\\n"));
-			data.replace(/\r/g, chalk.yellow.bold("\\r"));
+		} else if(settings.inputMode == 1) {
+			data = "> "+data.toString();
+			data.replace(/\n/g, "\\n");
+			data.replace(/\r/g, "\\r");
 			console.log(data);
 		}
 	}
