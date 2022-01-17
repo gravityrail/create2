@@ -10,7 +10,7 @@ export const serial = {baudRate:115200, dataBits:8, parity:'none', stopBits:1, f
 
 export const settings = {
 	debug: false,
-	inputMode: 1
+	inputMode: null
 }
 
 //----------- Helpful Functions -----------
@@ -96,7 +96,10 @@ export const open = (port, cb) => {
 	if(typeof port == 'string') r.port = new Serial(port, serial);
 	else if(port instanceof stream.Duplex) r.port = port; else { cb(); return; }
 	r.port.once('open', () => { r.start(); r.port.on('data', r.read); if(cb) cb(r); });
-	r.port.on('error', () => {});
+	r.port.on('error', (err) => {
+		console.log("Error: "+err);
+		if(cb) cb(null);
+	});
 }
 
 function Robot() { this.data = {}, this.delta = {}, this.on = {}; }
